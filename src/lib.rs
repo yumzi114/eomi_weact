@@ -2,7 +2,6 @@
 #![no_std]
 
 use core::sync::atomic::{AtomicUsize, Ordering};
-use rtt_target::{debug_rtt_init_print, debug_rprintln};
 
 use panic_probe as _;
 
