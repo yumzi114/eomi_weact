@@ -16,10 +16,9 @@ rtic = { version = "2.0.0", features = [ "thumbv7-backend" ] }
 # TODO(5) Add hal as dependency
 stm32h7xx-hal = { version = "0.16.0", features = ["stm32h735"] }
 embedded-hal-bus = "0.1"
-# embedded-hal-bus = "0.1"
 embedded-graphics = "0.8"
-mipidsi = "0.9.0"
-# embedded-hal = "0.2.7" 
+st7735-lcd = "0.9.0"
+embedded-hal = "0.2.7" 
 # embedded-graphics = "0.2.7" 
 # TODO add a monotonic if you use scheduling
 # rtic-monotonics = { version = "1.0.0", features = [ "cortex-m-systick" ]}
