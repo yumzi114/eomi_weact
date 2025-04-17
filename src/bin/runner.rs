@@ -8,13 +8,27 @@ static mut BUFFER: MaybeUninit<[u8; BUFFER_SIZE]> = MaybeUninit::uninit();
 
 use core::mem::MaybeUninit;
 const BUFFER_SIZE: usize = 100;
+type MyDisplay = Display<
+    SPIInterface<
+        Spi<SPI1, Enabled>,
+        Pin<'A', 2, Output>,
+        Pin<'A', 4, Output>
+    >,
+    ILI9486Rgb666,
+    Pin<'A', 1, Output>
+>;
 
-use eomi_weact as _; 
+use display_interface_spi::SPIInterface;
+use eomi_weact as _;
+use mipidsi::{models::ILI9486Rgb666, Display};
+use stm32h7xx_hal::{gpio::{Output, Pin}, pac::SPI1, spi::{Enabled, Spi}}; 
 #[rtic::app(
     device = stm32h7xx_hal::stm32,
     peripherals = true, 
     dispatchers = [EXTI0, EXTI1]
 )]
+
+
 
 mod app {
     
@@ -24,8 +38,6 @@ mod app {
     
     use display_interface_spi::SPIInterface;
     use embedded_graphics::mono_font::ascii::FONT_7X14_BOLD;
-    use embedded_graphics::mono_font::iso_8859_1::FONT_9X18_BOLD;
-    use embedded_graphics::mono_font::iso_8859_15::FONT_10X20;
     use embedded_graphics::pixelcolor::{Rgb565, Rgb666};
     use embedded_graphics::prelude::{Point, RgbColor};
     use embedded_graphics::primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle};
@@ -55,13 +67,16 @@ mod app {
     // use mipidsi::models::ILI9486Rgb565;
     use profont::PROFONT_24_POINT;
 
+    use crate::MyDisplay;
+
 
     
 
     #[shared]
     struct Shared {
         delay:Delay,
-        menu_num:usize
+        menu_num:usize,
+        
         // menu_list:[&'a str; 2]
     }
     #[local]
@@ -72,7 +87,7 @@ mod app {
         up_bt:Pin<'A', 10, Input>,
         down_bt:Pin<'A', 11, Input>,
         sel_bt:Pin<'A', 12, Input>,
-        display: Display<SPIInterface<Spi<SPI1, Enabled>, Pin<'A', 2, Output>, Pin<'A', 4, Output>>, ILI9486Rgb666, Pin<'A', 1, Output>>,
+        display: MyDisplay,
     }
 
     #[init]
@@ -127,6 +142,8 @@ mod app {
         let dc  = gpioe.pe13.into_push_pull_output();
         let sck = gpioe.pe12.into_alternate::<5>();
         let dummy_miso = stm32h7xx_hal::spi::NoMiso; 
+        let mut led= gpioe.pe10.into_push_pull_output();
+        led.set_low();
 
         //ILI9488 pins
         let mut back_l= gpioa.pa3.into_push_pull_output();
@@ -149,15 +166,14 @@ mod app {
         back_l.set_high();
         
         let spi_iface = SPIInterface::new(s_spi, s_dc,s_cs);
-        let mut display = Builder::ili9486_rgb666(spi_iface)
+        let mut display: Display<SPIInterface<Spi<SPI1, Enabled>, Pin<'A', 2, Output>, Pin<'A', 4, Output>>, ILI9486Rgb666, Pin<'A', 1, Output>> = Builder::ili9486_rgb666(spi_iface)
         .init(&mut delay, Some(s_rst)).unwrap();
         // let s_style = MonoTextStyle::new(&PROFONT_24_POINT, Rgb666::BLACK);
         display.clear(Rgb666::BLACK).unwrap();
         display.set_orientation(Orientationa::Landscape(false)).unwrap();
         display.set_orientation(Orientationa::Portrait(true)).unwrap();
         
-        let mut led= gpioe.pe10.into_push_pull_output();
-        led.set_low();
+        
         let blue_led: Pin<'E', 3, stm32h7xx_hal::gpio::Output>= gpioe.pe3.into_push_pull_output();
         
         let rst = gpioe.pe9.into_push_pull_output();
@@ -168,7 +184,7 @@ mod app {
                 polarity: Polarity::IdleLow,
                 phase: Phase::CaptureOnFirstTransition,
             },
-            8.MHz(),
+            20.MHz(),
             ccdr.peripheral.SPI4,
             &ccdr.clocks,
         );
@@ -188,12 +204,11 @@ mod app {
         Text::new("TTTTTT", Point::new(6, 30), style)
             .draw(&mut disp)
             .unwrap();
-
         debug_rprintln!("init Done"); 
         (
             Shared {
                 delay,
-                menu_num
+                menu_num,
                 
             },
             Local {
@@ -207,6 +222,15 @@ mod app {
             },
         )
     }
+    // #[task(priority = 1,shared = [delay,menu_num,display])]
+    // async fn display_refresh(cx: display_refresh::Context) {
+        
+    //     loop{
+            
+            
+    //     }
+    //     // defmt::info!("Hello from task1!");
+    // }
     #[idle(local=[display],shared = [delay,menu_num])]
     // #[idle]
     fn idle(mut cx:idle::Context,) -> ! {
@@ -219,6 +243,7 @@ mod app {
         let mut flag= 0_usize;
         loop {
       
+            
             cx.shared.menu_num.lock(| num|{
                 if *num !=flag{
                     Rectangle::new(Point::new(1, 10), Size::new(30, 130))
@@ -236,7 +261,6 @@ mod app {
                 }
                 
             });
-            
             menu_list.iter().enumerate().for_each(|(len, str)| {
                 let posion = len + 1;
                 if flag==posion{
@@ -267,7 +291,7 @@ mod app {
             // cortex_m::asm::wfi();
         }
     }
-
+    
     #[task(binds = EXTI15_10, 
         local=[
             k1_bt,
@@ -318,5 +342,6 @@ mod app {
             ctx.local.blue_led.set_low();
         }
     }
+    
     
 }
